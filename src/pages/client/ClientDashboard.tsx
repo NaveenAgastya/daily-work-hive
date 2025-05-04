@@ -1,147 +1,48 @@
-
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { FileText, CheckSquare, Clock, Calendar } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { CalendarDays, ShieldCheck, User2 } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { getInitials } from '@/lib/utils';
 import Navigation from '@/components/Navigation';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
-
-interface JobRequest {
-  id: string;
-  laborId: string;
-  laborName: string;
-  title: string;
-  description: string;
-  location: string;
-  date: string;
-  time: string;
-  hours: number;
-  rate: number;
-  status: 'pending' | 'accepted' | 'completed' | 'rejected';
-  createdAt: string;
-}
+import { supabase } from '../../integrations/supabase/client';
 
 const ClientDashboard = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
+  const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [jobRequests, setJobRequests] = useState<JobRequest[]>([]);
+  const navigate = useNavigate();
   
-  // Stats
-  const [stats, setStats] = useState({
-    pending: 0,
-    accepted: 0,
-    completed: 0,
-    totalSpent: 0,
-  });
+  // Update any code that uses user.uid to use user.id instead
+  const fetchJobs = async () => {
+    if (!currentUser) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('client_id', currentUser.id)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      
+      if (data) {
+        setJobs(data);
+      }
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+      toast.error('Failed to load jobs');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   useEffect(() => {
-    const fetchJobRequests = async () => {
-      if (!currentUser) return;
-      
-      try {
-        const q = query(
-          collection(db, 'jobRequests'),
-          where('clientId', '==', currentUser.uid)
-        );
-        
-        const querySnapshot = await getDocs(q);
-        const requests: JobRequest[] = [];
-        let pending = 0;
-        let accepted = 0;
-        let completed = 0;
-        let totalSpent = 0;
-        
-        querySnapshot.forEach((doc) => {
-          const data = doc.data() as Omit<JobRequest, 'id'>;
-          const job: JobRequest = {
-            id: doc.id,
-            ...data
-          };
-          
-          requests.push(job);
-          
-          // Update stats
-          if (job.status === 'pending') {
-            pending++;
-          } else if (job.status === 'accepted') {
-            accepted++;
-          } else if (job.status === 'completed') {
-            completed++;
-            totalSpent += job.rate * job.hours;
-          }
-        });
-        
-        // Sort by date (newest first)
-        requests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        
-        setJobRequests(requests);
-        setStats({
-          pending,
-          accepted,
-          completed,
-          totalSpent
-        });
-      } catch (error) {
-        console.error('Error fetching job requests:', error);
-        toast.error('Failed to load job requests');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchJobRequests();
+    fetchJobs();
   }, [currentUser]);
-  
-  const renderJobCard = (job: JobRequest) => (
-    <Card key={job.id} className="mb-4">
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="text-lg">{job.title}</CardTitle>
-            <CardDescription>
-              Worker: {job.laborName} • {job.date} at {job.time}
-            </CardDescription>
-          </div>
-          <Badge 
-            className={`
-              ${job.status === 'completed' ? 'bg-green-500' : ''}
-              ${job.status === 'pending' ? 'bg-amber-500' : ''}
-              ${job.status === 'accepted' ? 'bg-blue-500' : ''}
-              ${job.status === 'rejected' ? 'bg-red-500' : ''}
-            `}
-          >
-            {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          <p className="text-sm">{job.description}</p>
-          
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <span className="font-medium">Location:</span> {job.location}
-            </div>
-            <div>
-              <span className="font-medium">Duration:</span> {job.hours} hours
-            </div>
-            <div>
-              <span className="font-medium">Rate:</span> ${job.rate}/hr
-            </div>
-            <div>
-              <span className="font-medium">Total:</span> ${job.rate * job.hours}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
   
   return (
     <div className="flex min-h-screen flex-col">
@@ -149,120 +50,52 @@ const ClientDashboard = () => {
       
       <main className="flex-1 py-8">
         <div className="container px-4 md:px-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <h1 className="text-2xl font-bold">Client Dashboard</h1>
-            <Link to="/client/book">
-              <Button className="bg-labor-primary hover:bg-labor-dark">Book a Worker</Button>
-            </Link>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Card className="col-span-1">
+              <CardHeader>
+                <CardTitle>Book Labor</CardTitle>
+                <CardDescription>Hire someone for a task</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <Button onClick={() => navigate('/client/book')} className="w-full">
+                  Find Labor
+                </Button>
+              </CardContent>
+            </Card>
+            
+            <Card className="col-span-1">
+              <CardHeader>
+                <CardTitle>Profile</CardTitle>
+                <CardDescription>View and update your profile</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <Button onClick={() => navigate('/client/profile')} className="w-full">
+                  View Profile
+                </Button>
+              </CardContent>
+            </Card>
+            
+            <Card className="col-span-1">
+              <CardHeader>
+                <CardTitle>Your Jobs</CardTitle>
+                <CardDescription>Manage your active and past jobs</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                {loading ? (
+                  <div>Loading jobs...</div>
+                ) : jobs.length > 0 ? (
+                  jobs.map((job) => (
+                    <div key={job.id} className="border rounded-md p-4">
+                      <h3 className="font-semibold">{job.title}</h3>
+                      <p className="text-sm text-gray-500">{job.description}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div>No jobs found.</div>
+                )}
+              </CardContent>
+            </Card>
           </div>
-          
-          {/* Stats Overview */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <Card className="stat-card">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="h-5 w-5 text-amber-500" />
-                <h3 className="font-medium text-sm">Pending</h3>
-              </div>
-              <p className="text-2xl font-bold">{stats.pending}</p>
-            </Card>
-            
-            <Card className="stat-card">
-              <div className="flex items-center gap-2 mb-2">
-                <Calendar className="h-5 w-5 text-blue-500" />
-                <h3 className="font-medium text-sm">Accepted</h3>
-              </div>
-              <p className="text-2xl font-bold">{stats.accepted}</p>
-            </Card>
-            
-            <Card className="stat-card">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckSquare className="h-5 w-5 text-green-500" />
-                <h3 className="font-medium text-sm">Completed</h3>
-              </div>
-              <p className="text-2xl font-bold">{stats.completed}</p>
-            </Card>
-            
-            <Card className="stat-card">
-              <div className="flex items-center gap-2 mb-2">
-                <FileText className="h-5 w-5 text-gray-600" />
-                <h3 className="font-medium text-sm">Total Spent</h3>
-              </div>
-              <p className="text-2xl font-bold">${stats.totalSpent}</p>
-            </Card>
-          </div>
-          
-          {/* Job Requests */}
-          <Tabs defaultValue="all" className="w-full">
-            <TabsList className="mb-4">
-              <TabsTrigger value="all">All Jobs</TabsTrigger>
-              <TabsTrigger value="pending">Pending</TabsTrigger>
-              <TabsTrigger value="accepted">Accepted</TabsTrigger>
-              <TabsTrigger value="completed">Completed</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="all">
-              <div className="space-y-4">
-                {loading ? (
-                  <div className="text-center py-8">Loading job requests...</div>
-                ) : jobRequests.length === 0 ? (
-                  <div className="text-center py-8">
-                    <FileText className="mx-auto h-12 w-12 text-gray-400 mb-2" />
-                    <h3 className="font-medium text-lg">No job requests yet</h3>
-                    <p className="text-gray-500">
-                      Book your first worker to get started.
-                    </p>
-                    <Link to="/client/book" className="mt-4 inline-block">
-                      <Button className="bg-labor-primary hover:bg-labor-dark">Book a Worker</Button>
-                    </Link>
-                  </div>
-                ) : (
-                  jobRequests.map(renderJobCard)
-                )}
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="pending">
-              <div className="space-y-4">
-                {loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : jobRequests.filter(job => job.status === 'pending').length === 0 ? (
-                  <div className="text-center py-8">
-                    <h3>No pending job requests</h3>
-                  </div>
-                ) : (
-                  jobRequests.filter(job => job.status === 'pending').map(renderJobCard)
-                )}
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="accepted">
-              <div className="space-y-4">
-                {loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : jobRequests.filter(job => job.status === 'accepted').length === 0 ? (
-                  <div className="text-center py-8">
-                    <h3>No accepted jobs</h3>
-                  </div>
-                ) : (
-                  jobRequests.filter(job => job.status === 'accepted').map(renderJobCard)
-                )}
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="completed">
-              <div className="space-y-4">
-                {loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : jobRequests.filter(job => job.status === 'completed').length === 0 ? (
-                  <div className="text-center py-8">
-                    <h3>No completed jobs yet</h3>
-                  </div>
-                ) : (
-                  jobRequests.filter(job => job.status === 'completed').map(renderJobCard)
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
         </div>
       </main>
     </div>

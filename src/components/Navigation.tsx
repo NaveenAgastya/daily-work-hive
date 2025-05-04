@@ -111,7 +111,7 @@ const Navigation = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-2">
                     <User size={16} />
-                    {userData?.displayName || 'Account'}
+                    {userData?.display_name || 'Account'}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
