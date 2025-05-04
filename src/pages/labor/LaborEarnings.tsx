@@ -109,12 +109,12 @@ const LaborEarnings = () => {
           return jobDate.toDateString() === date.toDateString();
         });
         
-        const earnings = jobJobs.reduce((sum, job) => sum + (job.hours * job.rate), 0);
+        const earnings = dayJobs.reduce((sum, job) => sum + (job.hours * job.rate), 0);
         
         data.push({
           name: days[date.getDay()],
           earnings,
-          jobs: jobJobs.length,
+          jobs: dayJobs.length,
         });
       }
     } else if (period === 'month') {

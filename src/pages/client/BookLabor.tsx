@@ -67,7 +67,7 @@ const BookLabor = () => {
             city: data.city || 'Unknown',
             verified: !!data.idProofUrl, // Consider verified if ID proof is uploaded
             completedJobs: Math.floor(Math.random() * 50), // Mock data
-            rating: (3 + Math.random() * 2).toFixed(1), // Mock rating between 3-5
+            rating: Number((3 + Math.random() * 2).toFixed(1)), // Mock rating between 3-5, converted to number
           });
         });
         
@@ -151,7 +151,7 @@ const BookLabor = () => {
             </div>
             
             {/* Skills Filter */}
-            <ScrollArea className="w-full whitespace-nowrap mt-4" orientation="horizontal">
+            <ScrollArea className="w-full whitespace-nowrap mt-4">
               <div className="flex gap-2 py-1">
                 {allSkills.map((skill) => (
                   <Button

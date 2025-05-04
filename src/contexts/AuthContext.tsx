@@ -19,8 +19,10 @@ interface UserData {
   uid: string;
   email: string;
   displayName: string;
+  fullName?: string;
   role: UserRole;
   profileCompleted?: boolean;
+  address?: string; // Added address field
 }
 
 interface AuthContextType {

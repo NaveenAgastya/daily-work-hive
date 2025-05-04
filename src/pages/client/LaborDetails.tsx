@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -43,7 +42,7 @@ const LaborDetails = () => {
     date: '',
     time: '',
     hours: 4,
-    location: userData?.address || '',
+    location: userData?.address || '', // Using optional chaining in case address doesn't exist
   });
   
   const [submitting, setSubmitting] = useState(false);
