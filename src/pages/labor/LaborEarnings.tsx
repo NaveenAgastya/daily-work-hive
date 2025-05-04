@@ -1,63 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 import Navigation from '@/components/Navigation';
 import { supabase } from '../../integrations/supabase/client';
+import { Job } from '@/types/job';
 
-interface Job {
-  id: string;
-  title: string;
-  description: string;
-  client_id: string;
-  labor_id: string;
-  status: string;
-  amount: number;
-  created_at: string;
-  completed_at: string | null;
-  client_name: string;
+// Define the type for each data point in the chart
+interface EarningsDataPoint {
+  date: string;
+  earnings: number;
 }
 
 const LaborEarnings = () => {
   const { currentUser } = useAuth();
-  const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [completedJobs, setCompletedJobs] = useState<Job[]>([]);
   const [totalEarnings, setTotalEarnings] = useState(0);
+  const [earningsData, setEarningsData] = useState<EarningsDataPoint[]>([]);
   
   useEffect(() => {
-    fetchEarnings();
-  }, [currentUser]);
-  
-  const fetchEarnings = async () => {
-    if (!currentUser) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .eq('labor_id', currentUser.id)
-        .eq('status', 'completed')
-        .order('completed_at', { ascending: false });
-        
-      if (error) throw error;
+    const fetchCompletedJobs = async () => {
+      if (!currentUser) return;
       
-      if (data) {
-        setJobs(data);
+      try {
+        const { data, error } = await supabase
+          .from('jobs')
+          .select('*')
+          .eq('labor_id', currentUser.id)
+          .eq('status', 'completed');
         
-        // Calculate total earnings
-        const total = data.reduce((sum, job) => sum + (job.amount || 0), 0);
-        setTotalEarnings(total);
+        if (error) throw error;
+        
+        if (data) {
+          const typedData = data as Job[];
+          setCompletedJobs(typedData);
+          
+          // Calculate total earnings
+          const total = typedData.reduce((sum, job) => sum + (job.amount || 0), 0);
+          setTotalEarnings(total);
+          
+          // Generate data for the chart
+          // Group jobs by date and sum earnings
+          const earningsByDate = typedData.reduce((acc, job) => {
+            const date = job.created_at ? new Date(job.created_at).toLocaleDateString() : 'Unknown';
+            if (!acc[date]) {
+              acc[date] = 0;
+            }
+            acc[date] += (job.amount || 0);
+            return acc;
+          }, {} as Record<string, number>);
+          
+          // Convert to array format for the chart
+          const chartData = Object.keys(earningsByDate).map(date => ({
+            date,
+            earnings: earningsByDate[date]
+          }));
+          
+          setEarningsData(chartData);
+        }
+      } catch (error) {
+        console.error('Error fetching completed jobs:', error);
+        toast.error('Failed to load earnings data');
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error fetching earnings:', error);
-      toast.error('Failed to load earnings data');
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    
+    fetchCompletedJobs();
+  }, [currentUser]);
   
   return (
     <div className="flex min-h-screen flex-col">
@@ -65,106 +80,48 @@ const LaborEarnings = () => {
       
       <main className="flex-1 py-8">
         <div className="container px-4 md:px-6">
-          <div className="grid gap-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">Earnings</h1>
-                <p className="text-muted-foreground">
-                  View your completed jobs and earnings history
-                </p>
-              </div>
-            </div>
-            
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Total Earnings
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">${totalEarnings.toFixed(2)}</div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Completed Jobs
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{jobs.length}</div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Average Job Value
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    ${jobs.length > 0 ? (totalEarnings / jobs.length).toFixed(2) : '0.00'}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Earnings History</CardTitle>
-                <CardDescription>
-                  A list of all your completed jobs and payments
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="flex justify-center items-center h-40">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-labor-primary"></div>
-                  </div>
-                ) : jobs.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Job</TableHead>
-                        <TableHead>Client</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {jobs.map((job) => (
-                        <TableRow key={job.id}>
-                          <TableCell>
-                            {job.completed_at ? format(new Date(job.completed_at), 'MMM d, yyyy') : 'N/A'}
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{job.title}</div>
-                            <div className="text-sm text-muted-foreground line-clamp-1">
-                              {job.description}
-                            </div>
-                          </TableCell>
-                          <TableCell>{job.client_name || 'Client'}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            ${job.amount?.toFixed(2) || '0.00'}
-                          </TableCell>
-                        </TableRow>
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Earnings</CardTitle>
+              <CardDescription>A summary of your completed jobs and earnings.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loading ? (
+                <div>Loading earnings data...</div>
+              ) : (
+                <>
+                  <div className="text-2xl font-semibold">Total Earnings: ${totalEarnings.toFixed(2)}</div>
+                  
+                  {earningsData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={earningsData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="earnings" fill="#8884d8" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div>No earnings data available.</div>
+                  )}
+                  
+                  <h3 className="text-xl font-semibold">Completed Jobs</h3>
+                  {completedJobs.length > 0 ? (
+                    <ul>
+                      {completedJobs.map((job) => (
+                        <li key={job.id} className="py-2 border-b">
+                          {job.title} - ${job.amount?.toFixed(2) || '0.00'} (Completed on {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'Unknown'})
+                        </li>
                       ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-10">
-                    <h3 className="text-lg font-medium">No earnings yet</h3>
-                    <p className="text-muted-foreground mt-1">
-                      Complete jobs to start seeing your earnings history here.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                    </ul>
+                  ) : (
+                    <div>No completed jobs found.</div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>

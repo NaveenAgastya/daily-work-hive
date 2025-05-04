@@ -9,15 +9,15 @@ import { toast } from 'sonner';
 import { CalendarDays, DollarSign, User2 } from 'lucide-react';
 import Navigation from '@/components/Navigation';
 import { supabase } from '../../integrations/supabase/client';
+import { Job } from '@/types/job';
 
 const LaborDashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(true);
-  const [jobs, setJobs] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   
-  // Update any code that uses user.uid to use user.id instead
   const fetchJobs = async () => {
     if (!currentUser) return;
     
@@ -25,13 +25,12 @@ const LaborDashboard = () => {
       const { data, error } = await supabase
         .from('jobs')
         .select('*')
-        .eq('labor_id', currentUser.id)
-        .order('created_at', { ascending: false });
+        .eq('labor_id', currentUser.id);
         
       if (error) throw error;
       
       if (data) {
-        setJobs(data);
+        setJobs(data as Job[]);
       }
     } catch (error) {
       console.error('Error fetching jobs:', error);

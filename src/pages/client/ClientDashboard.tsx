@@ -9,14 +9,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getInitials } from '@/lib/utils';
 import Navigation from '@/components/Navigation';
 import { supabase } from '../../integrations/supabase/client';
+import { Job } from '@/types/job';
 
 const ClientDashboard = () => {
   const { currentUser, userData } = useAuth();
-  const [jobs, setJobs] = useState([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   
-  // Update any code that uses user.uid to use user.id instead
   const fetchJobs = async () => {
     if (!currentUser) return;
     
@@ -24,13 +24,12 @@ const ClientDashboard = () => {
       const { data, error } = await supabase
         .from('jobs')
         .select('*')
-        .eq('client_id', currentUser.id)
-        .order('created_at', { ascending: false });
+        .eq('client_id', currentUser.id);
         
       if (error) throw error;
       
       if (data) {
-        setJobs(data);
+        setJobs(data as Job[]);
       }
     } catch (error) {
       console.error('Error fetching jobs:', error);

@@ -6,24 +6,14 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { supabase } from '../../integrations/supabase/client';
+import { LaborProfile } from '@/types/laborProfile';
 
-interface LaborDetailsType {
-  id: string;
-  user_id: string;
-  phone: string;
-  city?: string;
-  skills: string[];
-  hourly_rate: string | number;
-  experience?: string;
-  bio?: string;
-  id_proof_url?: string;
-  created_at?: string;
-  updated_at?: string;
-  avatar?: string;
+interface LaborDetailsType extends LaborProfile {
   profiles?: {
     full_name?: string;
     display_name?: string;
   };
+  avatar?: string;
 }
 
 const LaborDetails = () => {
@@ -48,7 +38,7 @@ const LaborDetails = () => {
           .from('labor_profiles')
           .select(`
             *,
-            profiles:user_id (*)
+            profiles:user_id(full_name, display_name)
           `)
           .eq('user_id', laborId)
           .single();
@@ -57,19 +47,8 @@ const LaborDetails = () => {
         
         if (data) {
           setLaborDetails({
-            id: data.id,
-            user_id: data.user_id,
-            phone: data.phone,
-            city: data.city,
-            skills: data.skills,
-            hourly_rate: data.hourly_rate,
-            experience: data.experience,
-            bio: data.bio,
-            id_proof_url: data.id_proof_url,
-            created_at: data.created_at,
-            updated_at: data.updated_at,
-            avatar: '', // Placeholder for avatar
-            profiles: data.profiles
+            ...data,
+            avatar: '',
           });
         }
       } catch (error) {

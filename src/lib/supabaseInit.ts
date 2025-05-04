@@ -4,7 +4,8 @@ import { supabase } from "../integrations/supabase/client";
 // Function to initialize and setup Supabase storage
 export const initSupabaseStorage = async () => {
   try {
-    // Check if id_proofs bucket exists, if not create it
+    // Since we created the id_proofs bucket in the SQL migration,
+    // we only need to check if it exists and handle any other setup if needed
     const { data: buckets, error } = await supabase.storage.listBuckets();
     
     if (error) {
@@ -14,7 +15,7 @@ export const initSupabaseStorage = async () => {
     const idProofsBucketExists = buckets.some(bucket => bucket.name === 'id_proofs');
     
     if (!idProofsBucketExists) {
-      console.log('Creating id_proofs bucket...');
+      console.log('id_proofs bucket does not exist, creating...');
       const { data, error } = await supabase.storage.createBucket('id_proofs', {
         public: false,
         fileSizeLimit: 10485760, // 10MB
@@ -25,10 +26,9 @@ export const initSupabaseStorage = async () => {
       }
       
       console.log('id_proofs bucket created successfully');
+    } else {
+      console.log('id_proofs bucket already exists');
     }
-    
-    // Create appropriate policies for the bucket 
-    // This is typically done in the Supabase dashboard, not programmatically
     
     return { success: true };
   } catch (error) {
@@ -36,6 +36,3 @@ export const initSupabaseStorage = async () => {
     return { success: false, error };
   }
 };
-
-// Add the initSupabaseStorage function to your initialization code
-// You might call this in App.tsx on initial load
