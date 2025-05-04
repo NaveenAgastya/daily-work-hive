@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -9,11 +8,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import Navigation from '@/components/Navigation';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { supabase } from '../../integrations/supabase/client';
 
 const ClientProfile = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
   const [loading, setLoading] = useState(false);
   
   const [profile, setProfile] = useState({
@@ -27,30 +25,18 @@ const ClientProfile = () => {
   
   // Load existing profile data
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!currentUser) return;
-      
-      try {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setProfile({
-            fullName: userData.fullName || userData.displayName || '',
-            phone: userData.phone || '',
-            address: userData.address || '',
-            city: userData.city || '',
-            companyName: userData.companyName || '',
-            email: userData.email || currentUser.email || '',
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-        toast.error('Failed to load profile data');
-      }
-    };
+    if (!userData || !currentUser) return;
     
-    fetchUserProfile();
-  }, [currentUser]);
+    setProfile({
+      fullName: userData.full_name || userData.display_name || '',
+      phone: '', // We'll need to add this to our profiles table if needed
+      address: userData.address || '',
+      city: '', // We'll need to add this to our profiles table if needed
+      companyName: '', // We'll need to add this to our profiles table if needed
+      email: userData.email || currentUser.email || '',
+    });
+    
+  }, [currentUser, userData]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -74,16 +60,26 @@ const ClientProfile = () => {
     setLoading(true);
     
     try {
-      // Update user profile in Firestore
-      await updateDoc(doc(db, "users", currentUser.uid), {
-        ...profile,
-        updatedAt: new Date().toISOString()
-      });
+      // Update user profile in Supabase
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: profile.fullName,
+          address: profile.address,
+          profile_completed: true,
+          // We would need to add these fields to our profiles table
+          // phone: profile.phone,
+          // city: profile.city,
+          // company_name: profile.companyName
+        })
+        .eq('id', currentUser.id);
+      
+      if (error) throw error;
       
       toast.success('Profile updated successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating profile:', error);
-      toast.error('Failed to update profile');
+      toast.error(error.message || 'Failed to update profile');
     } finally {
       setLoading(false);
     }

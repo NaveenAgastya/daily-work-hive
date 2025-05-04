@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -22,7 +21,7 @@ const RegisterPage = () => {
   const navigate = useNavigate();
   
   // Redirect if already logged in
-  React.useEffect(() => {
+  useEffect(() => {
     if (currentUser) {
       if (isLabor) {
         navigate('/labor/dashboard');
@@ -55,9 +54,9 @@ const RegisterPage = () => {
     try {
       setLoading(true);
       await signup(email, password, role, name);
-      toast.success('Account created successfully!');
       
-      // Redirect based on role
+      // Redirect based on role - this will happen after email confirmation
+      // but we'll keep this logic for when we disable email confirmation in development
       if (role === 'labor') {
         navigate('/labor/profile'); // Send to profile completion
       } else {

@@ -1,35 +1,27 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut,
-  User,
-  updateProfile,
-  UserCredential
-} from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import { User, Session } from "@supabase/supabase-js";
+import { supabase } from "../integrations/supabase/client";
 import { toast } from "sonner";
 
 type UserRole = "labor" | "client";
 
 interface UserData {
-  uid: string;
+  id: string;
   email: string;
-  displayName: string;
-  fullName?: string;
+  display_name: string;
+  full_name?: string;
   role: UserRole;
-  profileCompleted?: boolean;
-  address?: string; // Added address field
+  profile_completed?: boolean;
+  address?: string;
 }
 
 interface AuthContextType {
   currentUser: User | null;
+  session: Session | null;
   userData: UserData | null;
-  signup: (email: string, password: string, role: UserRole, name: string) => Promise<UserCredential>;
-  login: (email: string, password: string) => Promise<UserCredential>;
+  signup: (email: string, password: string, role: UserRole, name: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   loading: boolean;
   isLabor: boolean;
@@ -48,49 +40,65 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const signup = async (email: string, password: string, role: UserRole, name: string): Promise<UserCredential> => {
+  // Signup function
+  const signup = async (email: string, password: string, role: UserRole, name: string): Promise<void> => {
     try {
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Update the user's display name
-      if (result.user) {
-        await updateProfile(result.user, { displayName: name });
-        
-        // Add user data to Firestore
-        const userData = {
-          uid: result.user.uid,
-          email: result.user.email,
-          displayName: name,
-          role: role,
-          profileCompleted: role === "client" ? true : false,
-          createdAt: new Date().toISOString(),
-        };
-        
-        await setDoc(doc(db, "users", result.user.uid), userData);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name,
+            role: role
+          }
+        }
+      });
+
+      if (error) {
+        throw error;
       }
+
+      toast.success("Account created successfully! Check your email to confirm your registration.");
       
-      return result;
+      // No need to manually create a profile record as the trigger will do that
     } catch (error: any) {
       toast.error(error.message || "Failed to create account");
       throw error;
     }
   };
 
-  const login = async (email: string, password: string): Promise<UserCredential> => {
+  // Login function
+  const login = async (email: string, password: string): Promise<void> => {
     try {
-      return await signInWithEmailAndPassword(auth, email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success("Logged in successfully");
     } catch (error: any) {
       toast.error(error.message || "Failed to login");
       throw error;
     }
   };
 
+  // Logout function
   const logout = async (): Promise<void> => {
     try {
-      await signOut(auth);
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        throw error;
+      }
+      
       toast.success("Logged out successfully");
     } catch (error: any) {
       toast.error(error.message || "Failed to logout");
@@ -98,36 +106,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Fetch user data from Firestore
-  const fetchUserData = async (user: User) => {
+  // Fetch user profile data
+  const fetchUserData = async (userId: string) => {
     try {
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (userSnap.exists()) {
-        setUserData(userSnap.data() as UserData);
-      } else {
-        console.log("No user data found!");
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (error) {
+        console.error("Error fetching user data:", error);
+        return;
+      }
+
+      if (data) {
+        setUserData({
+          id: data.id,
+          email: data.email,
+          display_name: data.display_name,
+          full_name: data.full_name,
+          role: data.role as UserRole,
+          profile_completed: data.profile_completed,
+          address: data.address
+        });
       }
     } catch (error) {
-      console.error("Error fetching user data:", error);
+      console.error("Error in fetchUserData:", error);
     }
   };
 
+  // Set up auth state listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        setSession(currentSession);
+        setCurrentUser(currentSession?.user || null);
+        
+        if (currentSession?.user) {
+          // Use setTimeout to prevent potential deadlocks
+          setTimeout(() => {
+            fetchUserData(currentSession.user.id);
+          }, 0);
+        } else {
+          setUserData(null);
+        }
+
+        setLoading(false);
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+      setCurrentUser(currentSession?.user || null);
       
-      if (user) {
-        await fetchUserData(user);
-      } else {
-        setUserData(null);
+      if (currentSession?.user) {
+        fetchUserData(currentSession.user.id);
       }
       
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const isLabor = userData?.role === "labor";
@@ -135,6 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const value = {
     currentUser,
+    session,
     userData,
     signup,
     login,

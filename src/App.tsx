@@ -1,10 +1,11 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { useEffect } from "react";
+import { initSupabaseStorage } from "./lib/supabaseInit";
 
 // Pages
 import HomePage from "./pages/HomePage";
@@ -42,17 +43,30 @@ const ProtectedRoute = ({ children, requiredRole }: { children: JSX.Element, req
 };
 
 // App wrapper with providers
-const AppWithProviders = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <AppRoutes />
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+const AppWithProviders = () => {
+  // Initialize Supabase storage on app load
+  useEffect(() => {
+    initSupabaseStorage().then(result => {
+      if (result.success) {
+        console.log("Supabase storage initialized successfully");
+      } else {
+        console.error("Failed to initialize Supabase storage:", result.error);
+      }
+    });
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <AppRoutes />
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+};
 
 // App routes
 const AppRoutes = () => {
